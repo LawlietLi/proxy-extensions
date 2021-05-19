@@ -5,11 +5,13 @@ load(
     "envoy_package",
 )
 
+envoy_package()
+
 envoy_cc_library(
-    name = "config",
+    name = "config_lib",
+    repository = "@envoy",
     srcs = ["config.cc"],
     hdrs = ["config.h"],
-    repository = "@envoy",
     deps = [
         ":dubbo_rbac_filter",
         "@envoy//source/exe:envoy_common_lib",
@@ -18,9 +20,9 @@ envoy_cc_library(
 
 envoy_cc_library(
     name = "dubbo_rbac_filter",
+    repository = "@envoy",
     srcs = ["dubbo_rbac_filter.cc"],
     hdrs = ["dubbo_rbac_filter.h"],
-    repository = "@envoy",
     visibility = ["//visibility:public"],
     deps = [
         "@envoy//source/exe:envoy_common_lib",
