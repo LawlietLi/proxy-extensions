@@ -26,7 +26,7 @@ static const std::string DubboRbacFilterName = "envoy.filters.dubbo.rbac";
 
 class DubboRbacDynamicMetadataKeys {
 public:
-    const std::string ServiceField{"interface"};
+    const std::string ServiceField{"service"};
     const std::string MethodField{"method"};
 };
 
@@ -42,6 +42,15 @@ public:
 
   Filters::Common::RBAC::RoleBasedAccessControlFilterStats& stats() { return stats_; }
 
+  std::string shadowEffectivePolicyIdField() const {
+    return shadow_rules_stat_prefix_ +
+           Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().ShadowEffectivePolicyIdField;
+  }
+  std::string shadowEngineResultField() const {
+    return shadow_rules_stat_prefix_ +
+           Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().ShadowEngineResultField;
+  }
+
   const Filters::Common::RBAC::RoleBasedAccessControlEngineImpl*
   engine(Filters::Common::RBAC::EnforcementMode mode) const {
     return mode == Filters::Common::RBAC::EnforcementMode::Enforced ? engine_.get()
@@ -54,6 +63,7 @@ public:
 
 private:
   Filters::Common::RBAC::RoleBasedAccessControlFilterStats stats_;
+  const std::string shadow_rules_stat_prefix_;
 
   std::unique_ptr<Filters::Common::RBAC::RoleBasedAccessControlEngineImpl> engine_;
   std::unique_ptr<Filters::Common::RBAC::RoleBasedAccessControlEngineImpl> shadow_engine_;

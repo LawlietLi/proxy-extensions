@@ -14,7 +14,9 @@ namespace RBACFilter {
 
 RoleBasedAccessControlFilterConfig::RoleBasedAccessControlFilterConfig(
     const envoy::extensions::filters::network::rbac::v3::RBAC& proto_config, Stats::Scope& scope)
-    : stats_(Filters::Common::RBAC::generateStats(proto_config.stat_prefix(), scope)),
+    : stats_(Filters::Common::RBAC::generateStats(proto_config.stat_prefix(),
+                                                  proto_config.shadow_rules_stat_prefix(), scope)),
+      shadow_rules_stat_prefix_(proto_config.shadow_rules_stat_prefix()),
       engine_(Filters::Common::RBAC::createEngine(proto_config)),
       shadow_engine_(Filters::Common::RBAC::createShadowEngine(proto_config)),
       enforcement_type_(proto_config.enforcement_type()) {}
@@ -53,23 +55,24 @@ DubboProxy::FilterStatus RoleBasedAccessControlFilter::onMessageDecoded(MessageM
   clearDynamicMetadata();
   setDynamicMetadata(invocation);
 
-  ENVOY_LOG(debug,
-            "checking connection: requestedServerName: {}, sourceIP: {}, directRemoteIP: {},"
-            "remoteIP: {}, localAddress: {}, ssl: {}, dynamicMetadata: {}",
-            callbacks_->connection()->requestedServerName(),
-            callbacks_->connection()->remoteAddress()->asString(),
-            callbacks_->streamInfo().downstreamDirectRemoteAddress()->asString(),
-            callbacks_->streamInfo().downstreamRemoteAddress()->asString(),
-            callbacks_->streamInfo().downstreamLocalAddress()->asString(),
-            callbacks_->connection()->ssl()
-            ? "uriSanPeerCertificate: " +
-              absl::StrJoin(callbacks_->connection()->ssl()->uriSanPeerCertificate(), ",") +
-              ", dnsSanPeerCertificate: " +
-              absl::StrJoin(callbacks_->connection()->ssl()->dnsSansPeerCertificate(), ",") +
-              ", subjectPeerCertificate: " +
-              callbacks_->connection()->ssl()->subjectPeerCertificate()
-            : "none",
-            callbacks_->streamInfo().dynamicMetadata().DebugString());
+  ENVOY_LOG(
+      debug,
+      "checking connection: requestedServerName: {}, sourceIP: {}, directRemoteIP: {},"
+      "remoteIP: {}, localAddress: {}, ssl: {}, dynamicMetadata: {}",
+      callbacks_->connection()->requestedServerName(),
+      callbacks_->connection()->addressProvider().remoteAddress()->asString(),
+      callbacks_->streamInfo().downstreamAddressProvider().directRemoteAddress()->asString(),
+      callbacks_->streamInfo().downstreamAddressProvider().remoteAddress()->asString(),
+      callbacks_->streamInfo().downstreamAddressProvider().localAddress()->asString(),
+      callbacks_->connection()->ssl()
+          ? "uriSanPeerCertificate: " +
+                absl::StrJoin(callbacks_->connection()->ssl()->uriSanPeerCertificate(), ",") +
+                ", dnsSanPeerCertificate: " +
+                absl::StrJoin(callbacks_->connection()->ssl()->dnsSansPeerCertificate(), ",") +
+                ", subjectPeerCertificate: " +
+                callbacks_->connection()->ssl()->subjectPeerCertificate()
+          : "none",
+      callbacks_->streamInfo().dynamicMetadata().DebugString());
 
   std::string log_policy_id = "none";
   // When the enforcement type is continuous always do the RBAC checks. If it is a one time check,
@@ -110,11 +113,9 @@ void RoleBasedAccessControlFilter::setShadowResult(std::string shadow_engine_res
   ProtobufWkt::Struct metrics;
   auto& fields = *metrics.mutable_fields();
   if (!shadow_policy_id.empty()) {
-    *fields[Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().ShadowEffectivePolicyIdField]
-         .mutable_string_value() = shadow_policy_id;
+    *fields[config_->shadowEffectivePolicyIdField()].mutable_string_value() = shadow_policy_id;
   }
-  *fields[Filters::Common::RBAC::DynamicMetadataKeysSingleton::get().ShadowEngineResultField]
-       .mutable_string_value() = shadow_engine_result;
+  *fields[config_->shadowEngineResultField()].mutable_string_value() = shadow_engine_result;
   callbacks_->streamInfo().setDynamicMetadata(DubboRbacFilterName, metrics);
 }
 
